@@ -52,9 +52,8 @@ void send_beacon_message(const union ODID_Message_encoded *encoded, uint8_t msg_
     wpa_request(ctrl_conn, sizeof(cmd)/sizeof(cmd[0]), cmd);
     sem_wait(&semaphore);
 
-    // It doesn't appear to be necessary to send the update_beacon cmd?
-    //send_update_beacon();
-    //sleep(1);
+    send_update_beacon();
+    sleep(1);
 }
 
 // See also description for send_beacon_message()
@@ -81,9 +80,8 @@ void send_beacon_message_pack(struct ODID_MessagePack_encoded *pack_enc, uint8_t
     sem_wait(&semaphore);
     sleep(1);
 
-    // It doesn't appear to be necessary to send the update_beacon cmd?
-    //send_update_beacon();
-    //sleep(1);
+    send_update_beacon();
+    sleep(1);
 }
 
 void send_quit() {
