@@ -92,6 +92,7 @@ static void fill_example_data(struct ODID_UAS_Data *uasData) {
     uasData->System.CategoryEU = ODID_CATEGORY_EU_OPEN;
     uasData->System.ClassEU = ODID_CLASS_EU_CLASS_1;
     uasData->System.OperatorAltitudeGeo = 20.5f;
+    uasData->System.Timestamp = 28056789;
 
     uasData->OperatorID.OperatorIdType = ODID_OPERATOR_ID;
     char operatorId[] = "FIN87astrdge12k8";
