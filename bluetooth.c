@@ -103,6 +103,8 @@ static void generate_random_mac_address(uint8_t *mac) {
     srand(time(0)); // NOLINT(cert-msc51-cpp)
     for (int i = 0; i < 6; i++)
         mac[i] = rand() % 255; // NOLINT(cert-msc50-cpp)
+        
+    mac[0] |= 0xC0;  // set to Bluetooth Random Static Address, see https://www.novelbits.io/bluetooth-address-privacy-ble/ or section 1.3 of the Bluetooth specification (5.3)
 }
 
 /*
