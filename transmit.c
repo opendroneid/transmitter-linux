@@ -139,7 +139,7 @@ static void send_message(union ODID_Message_encoded *encoded, struct config_data
         send_bluetooth_message_extended_api(encoded, msg_counter, config);
     if (config->use_beacon)
         send_beacon_message(encoded, msg_counter);
-    //sleep(1);
+    usleep(500000);
 }
 
 // When using the WiFi Beacon transport method, the standards require that all messages are wrapped
@@ -350,7 +350,7 @@ void gps_loop(struct ODID_UAS_Data *uasData) {
                 printf("Failed to read from socket, retrying...\n");
                 if(read_retries++ > MAX_GPS_READ_RETRIES) {
                     fprintf(stderr, "Max socket read retries reached, exiting...");
-                    break;
+                    cleanup(EXIT_FAILURE);
                 }
                 continue;
             }
