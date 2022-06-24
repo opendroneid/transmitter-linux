@@ -32,6 +32,14 @@ make -j4
 cd -
 ```
 
+Compile gpsd (see [gpsd/build.adoc](https://gitlab.com/gpsd/gpsd/-/blob/master/build.adoc) for all build requirements):
+```
+sudo apt install scons
+cd gpsd
+sed -i 's/\(variantdir *=\).*$/\1 gpsd-dev/'
+scons minimal=yes shared=True gpsd=False gpsdclients=False socket_export=yes
+```
+
 Compile the transmitter example application:
 ```
 mkdir build && cd build
