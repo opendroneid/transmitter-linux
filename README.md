@@ -38,6 +38,7 @@ sudo apt install scons
 cd gpsd
 sed -i 's/\(variantdir *=\).*$/\1 gpsd-dev/'
 scons minimal=yes shared=True gpsd=False gpsdclients=False socket_export=yes
+cd -
 ```
 
 Compile the transmitter example application:
@@ -54,6 +55,7 @@ make -j4
 * `4` Enable Bluetooth 4 Legacy Advertising transmission using Extended Advertising API
 * `5` Enable Bluetooth 5 Long Range + Extended Advertising transmission
 * `p` Use message packs instead of single messages
+* `g` Enable gps messages
 
 
 ## Starting Wi-Fi Beacon transmission

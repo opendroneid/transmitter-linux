@@ -243,6 +243,7 @@ void print_help() {
     printf("           using the Extended Advertising HCI API commands\n");
     printf("         5 Enable Bluetooth 5 Long Range + Extended Advertising transmission\n");
     printf("         p Use message packs instead of single messages\n");
+    printf("         g Use gpsd to dynamically update location messages after each loop of messages\n");
     printf("E.g. sudo ./transmit b p\n\n");
     printf("Wi-Fi Beacon transmit only works when running\n");
     printf("\"sudo hostapd/hostapd/hostapd beacon.conf\" in a separate shell.\n");
