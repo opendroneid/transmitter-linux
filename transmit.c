@@ -14,16 +14,23 @@
 #include <unistd.h>
 #include <pthread.h>
 #include <semaphore.h>
+#include <signal.h>
+#include <errno.h>
 #include "ap_interface.h"
 #include "bluetooth.h"
 #include "wifi_beacon.h"
+#include "gpsmod.h"
 
 sem_t semaphore;
+pthread_t id;
 
 #define MINIMUM(a,b) (((a)<(b))?(a):(b))
 
 #define BASIC_ID_POS_ZERO 0
 #define BASIC_ID_POS_ONE 1
+
+static struct config_data config = { 0 };
+static bool kill_program = false;
 
 static void fill_example_data(struct ODID_UAS_Data *uasData) {
     uasData->BasicID[BASIC_ID_POS_ZERO].UAType = ODID_UATYPE_HELICOPTER_OR_MULTIROTOR;
@@ -100,6 +107,31 @@ static void fill_example_data(struct ODID_UAS_Data *uasData) {
             MINIMUM(sizeof(operatorId), sizeof(uasData->OperatorID.OperatorId)));
 }
 
+
+
+static void cleanup(int exit_code) {
+    if (config.use_btl || config.use_bt4 || config.use_bt5)
+        close_bluetooth(&config);
+
+    if (config.use_beacon) {
+        send_quit();
+
+        int *ptr;
+        pthread_join(id, (void **) &ptr);
+        printf("Return value from ap_interface_init: %i\n", *ptr);
+
+        sem_destroy(&semaphore);
+    }
+
+    exit(exit_code);
+}
+
+static void sig_handler(int signo) {
+    if (signo == SIGINT || signo == SIGSTOP || signo == SIGKILL || signo == SIGTERM) {
+        kill_program = true;
+    }
+}
+
 static void send_message(union ODID_Message_encoded *encoded, struct config_data *config, uint8_t msg_counter) {
     if (config->use_btl)
         send_bluetooth_message(encoded, msg_counter, config);
@@ -107,7 +139,7 @@ static void send_message(union ODID_Message_encoded *encoded, struct config_data
         send_bluetooth_message_extended_api(encoded, msg_counter, config);
     if (config->use_beacon)
         send_beacon_message(encoded, msg_counter);
-    sleep(4);
+    //sleep(1);
 }
 
 // When using the WiFi Beacon transport method, the standards require that all messages are wrapped
@@ -246,6 +278,9 @@ static void parse_command_line(int argc, char *argv[], struct config_data *confi
             case 'p':
                 config->use_packs = true;
                 break;
+            case 'g':
+                config->use_gps = true;
+                break;
             default:
                 break;
         }
@@ -272,12 +307,69 @@ static void parse_command_line(int argc, char *argv[], struct config_data *confi
         print_help();
         exit(EXIT_SUCCESS);
     }
+
+    if (config->use_gps)
+        printf("\nWarning: Fetching GPS data requires a configured GPS sensor.\n\n");
+}
+
+void gps_loop(struct ODID_UAS_Data *uasData) {
+    signal(SIGINT,  sig_handler);
+    signal(SIGKILL, sig_handler);
+    signal(SIGSTOP, sig_handler);
+    signal(SIGTERM, sig_handler);
+
+    if(init_gps() != 0) {
+        fprintf(stderr,
+                "No gpsd running or network error: %d, %s\n",
+                errno, gps_errstr(errno));
+        cleanup(EXIT_FAILURE);
+    }
+
+
+    char gpsd_message[GPS_JSON_RESPONSE_MAX];
+    int retries = 0;      // cycles to wait before gpsd timeout
+    int read_retries = 0;
+    while(true) {
+        if(kill_program)
+            break;
+
+        int ret;
+        ret = gps_waiting(&gpsdata, GPS_WAIT_TIME_MICROSECS);
+        if (!ret) {
+            printf("Socket not ready, retrying...\n");
+            if (retries++ > MAX_GPS_WAIT_RETRIES) {
+                    fprintf(stderr, "Max socket wait retries reached, exiting...");
+                cleanup(EXIT_FAILURE);
+            }
+            continue;
+        } else {
+            retries = 0;
+            gpsd_message[0] = '\0';
+
+            if (gps_read(&gpsdata, gpsd_message, sizeof(gpsd_message)) == -1) {
+                printf("Failed to read from socket, retrying...\n");
+                if(read_retries++ > MAX_GPS_READ_RETRIES) {
+                    fprintf(stderr, "Max socket read retries reached, exiting...");
+                    break;
+                }
+                continue;
+            }
+            read_retries = 0;
+
+            printf("%s\n", gpsd_message);
+
+            process_gps_data(uasData);
+
+            if (config.use_packs)
+                send_packs(uasData, &config);
+            else
+                send_single_messages(uasData, &config);
+        }
+    }
 }
 
 int main(int argc, char *argv[])
 {
-    pthread_t id;
-    struct config_data config = { 0 };
     parse_command_line(argc, argv, &config);
 
     config.handle_bt4 = 0; // The Extended Advertising set number used for BT4
@@ -296,21 +388,14 @@ int main(int argc, char *argv[])
     if (config.use_btl || config.use_bt4 || config.use_bt5)
         init_bluetooth(&config);
 
-    if (config.use_packs)
-        send_packs(&uasData, &config);
-    else
-        send_single_messages(&uasData, &config);
-
-    if (config.use_btl || config.use_bt4 || config.use_bt5)
-        close_bluetooth(&config);
-
-    if (config.use_beacon) {
-        send_quit();
-
-        int *ptr;
-        pthread_join(id, (void **) &ptr);
-        printf("Return value from ap_interface_init: %i\n", *ptr);
-
-        sem_destroy(&semaphore);
+    if(config.use_gps) {
+        gps_loop(&uasData);
+    } else {
+        if (config.use_packs)
+            send_packs(&uasData, &config);
+        else
+            send_single_messages(&uasData, &config);
     }
+
+    cleanup(EXIT_SUCCESS);
 }
