@@ -36,7 +36,7 @@ Compile gpsd (see [gpsd/build.adoc](https://gitlab.com/gpsd/gpsd/-/blob/master/b
 ```
 sudo apt install scons
 cd gpsd
-sed -i 's/\(variantdir *=\).*$/\1 gpsd-dev/' SConstruct
+sed -i 's/\(variantdir *=\).*$/\1 "gpsd-dev"/' SConstruct
 scons minimal=yes shared=True gpsd=False gpsdclients=False socket_export=yes
 cd -
 ```
