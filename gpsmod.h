@@ -1,6 +1,6 @@
 
-#ifndef _GPS_H_
-#define _GPS_H_
+#ifndef _GPSMOD_H_
+#define _GPSMOD_H_
 
 #include "gpsd/gpsd-dev/include/libgps.h"
 #include "bluetooth.h"
