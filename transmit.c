@@ -45,23 +45,6 @@ static void fill_example_data(struct ODID_UAS_Data *uasData) {
     strncpy(uasData->BasicID[BASIC_ID_POS_ONE].UASID, uas_caa_id,
             MINIMUM(sizeof(uas_caa_id), sizeof(uasData->BasicID[BASIC_ID_POS_ONE].UASID)));
 
-    uasData->Location.Status = ODID_STATUS_AIRBORNE;
-    uasData->Location.Direction = 361.f;
-    uasData->Location.SpeedHorizontal = 0.0f;
-    uasData->Location.SpeedVertical = 0.35f;
-    uasData->Location.Latitude = 51.4791;
-    uasData->Location.Longitude = -0.0013;
-    uasData->Location.AltitudeBaro = 100;
-    uasData->Location.AltitudeGeo = 110;
-    uasData->Location.HeightType = ODID_HEIGHT_REF_OVER_GROUND;
-    uasData->Location.Height = 80;
-    uasData->Location.HorizAccuracy = createEnumHorizontalAccuracy(5.5f);
-    uasData->Location.VertAccuracy = createEnumVerticalAccuracy(9.5f);
-    uasData->Location.BaroAccuracy = createEnumVerticalAccuracy(0.5f);
-    uasData->Location.SpeedAccuracy = createEnumSpeedAccuracy(0.5f);
-    uasData->Location.TSAccuracy = createEnumTimestampAccuracy(0.1f);
-    uasData->Location.TimeStamp = 360.52f;
-
     uasData->Auth[0].AuthType = ODID_AUTH_UAS_ID_SIGNATURE;
     uasData->Auth[0].DataPage = 0;
     uasData->Auth[0].LastPageIndex = 2;
@@ -105,6 +88,25 @@ static void fill_example_data(struct ODID_UAS_Data *uasData) {
     char operatorId[] = "FIN87astrdge12k8";
     strncpy(uasData->OperatorID.OperatorId, operatorId,
             MINIMUM(sizeof(operatorId), sizeof(uasData->OperatorID.OperatorId)));
+}
+
+static void fill_example_gps_data(struct ODID_UAS_Data *uasData) {
+    uasData->Location.Status = ODID_STATUS_AIRBORNE;
+    uasData->Location.Direction = 361.f;
+    uasData->Location.SpeedHorizontal = 0.0f;
+    uasData->Location.SpeedVertical = 0.35f;
+    uasData->Location.Latitude = 51.4791;
+    uasData->Location.Longitude = -0.0013;
+    uasData->Location.AltitudeBaro = 100;
+    uasData->Location.AltitudeGeo = 110;
+    uasData->Location.HeightType = ODID_HEIGHT_REF_OVER_GROUND;
+    uasData->Location.Height = 80;
+    uasData->Location.HorizAccuracy = createEnumHorizontalAccuracy(5.5f);
+    uasData->Location.VertAccuracy = createEnumVerticalAccuracy(9.5f);
+    uasData->Location.BaroAccuracy = createEnumVerticalAccuracy(0.5f);
+    uasData->Location.SpeedAccuracy = createEnumSpeedAccuracy(0.5f);
+    uasData->Location.TSAccuracy = createEnumTimestampAccuracy(0.1f);
+    uasData->Location.TimeStamp = 360.52f;
 }
 
 static void cleanup(int exit_code) {
@@ -383,6 +385,8 @@ int main(int argc, char *argv[])
     struct ODID_UAS_Data uasData;
     odid_initUasData(&uasData);
     fill_example_data(&uasData);
+    if(!config.use_gps)
+        fill_example_gps_data(&uasData);
 
     if (config.use_btl || config.use_bt4 || config.use_bt5)
         init_bluetooth(&config);
