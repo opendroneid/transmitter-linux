@@ -38,6 +38,11 @@ void process_gps_data(struct ODID_UAS_Data *uasData) {
             uasData->Location.AltitudeBaro = gpsdata.fix.altMSL;
             uasData->Location.Height = \
                 gpsdata.fix.altMSL - uasData->System.OperatorAltitudeGeo;
+        } else if(isfinite(gpsdata.fix.altitude)) {
+            uasData->Location.AltitudeGeo = gpsdata.fix.altitude;
+            uasData->Location.AltitudeBaro = gpsdata.fix.altitude;
+            uasData->Location.Height = \
+                gpsdata.fix.altitude - uasData->System.OperatorAltitudeGeo;
         }
 
         if(isfinite(gpsdata.fix.speed)) {

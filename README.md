@@ -55,7 +55,7 @@ make -j4
 * `4` Enable Bluetooth 4 Legacy Advertising transmission using Extended Advertising API
 * `5` Enable Bluetooth 5 Long Range + Extended Advertising transmission
 * `p` Use message packs instead of single messages
-* `g` Enable gps messages
+* `g` Use gpsd to dynamically update location messages after each loop of messages
 
 
 ## Starting Wi-Fi Beacon transmission

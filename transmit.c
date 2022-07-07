@@ -107,8 +107,6 @@ static void fill_example_data(struct ODID_UAS_Data *uasData) {
             MINIMUM(sizeof(operatorId), sizeof(uasData->OperatorID.OperatorId)));
 }
 
-
-
 static void cleanup(int exit_code) {
     if (config.use_btl || config.use_bt4 || config.use_bt5)
         close_bluetooth(&config);
@@ -139,7 +137,7 @@ static void send_message(union ODID_Message_encoded *encoded, struct config_data
         send_bluetooth_message_extended_api(encoded, msg_counter, config);
     if (config->use_beacon)
         send_beacon_message(encoded, msg_counter);
-    usleep(500000);
+    usleep(100000);
 }
 
 // When using the WiFi Beacon transport method, the standards require that all messages are wrapped
@@ -148,7 +146,7 @@ static void send_single_messages(struct ODID_UAS_Data *uasData, struct config_da
     union ODID_Message_encoded encoded;
     memset(&encoded, 0, sizeof(union ODID_Message_encoded));
 
-    for (int i = 0; i < 10; i++) {
+    for (int i = 0; i < 1; i++) {
         if (encodeBasicIDMessage((ODID_BasicID_encoded *) &encoded, &uasData->BasicID[BASIC_ID_POS_ZERO]) != ODID_SUCCESS)
             printf("Error: Failed to encode Basic ID\n");
         send_message(&encoded, config, config->msg_counters[ODID_MSG_COUNTER_BASIC_ID]++);
@@ -357,7 +355,7 @@ void gps_loop(struct ODID_UAS_Data *uasData) {
             }
             read_retries = 0;
 
-            printf("%s\n", gpsd_message);
+            printf("gpsd: %s\n", gpsd_message);
 
             process_gps_data(uasData);
 
