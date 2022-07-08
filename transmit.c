@@ -16,6 +16,7 @@
 #include <semaphore.h>
 #include <signal.h>
 #include <errno.h>
+#include <sys/resource.h>
 #include "ap_interface.h"
 #include "bluetooth.h"
 #include "wifi_beacon.h"
@@ -31,6 +32,9 @@ pthread_t id;
 
 static struct config_data config = { 0 };
 static bool kill_program = false;
+
+static struct fixsource_t source;
+static struct gps_data_t gpsdata;
 
 static void fill_example_data(struct ODID_UAS_Data *uasData) {
     uasData->BasicID[BASIC_ID_POS_ZERO].UAType = ODID_UATYPE_HELICOPTER_OR_MULTIROTOR;
@@ -122,6 +126,9 @@ static void cleanup(int exit_code) {
 
         sem_destroy(&semaphore);
     }
+
+    if(config.use_gps)
+        gps_close(&gpsdata);
 
     exit(exit_code);
 }
@@ -319,7 +326,7 @@ void gps_loop(struct ODID_UAS_Data *uasData) {
     signal(SIGSTOP, sig_handler);
     signal(SIGTERM, sig_handler);
 
-    if(init_gps() != 0) {
+    if(init_gps(&source, &gpsdata) != 0) {
         fprintf(stderr,
                 "No gpsd running or network error: %d, %s\n",
                 errno, gps_errstr(errno));
@@ -359,7 +366,7 @@ void gps_loop(struct ODID_UAS_Data *uasData) {
 
             printf("gpsd: %s\n", gpsd_message);
 
-            process_gps_data(uasData);
+            process_gps_data(&gpsdata, uasData);
 
             if (config.use_packs)
                 send_packs(uasData, &config);
@@ -371,7 +378,25 @@ void gps_loop(struct ODID_UAS_Data *uasData) {
 
 int main(int argc, char *argv[])
 {
-    parse_command_line(argc, argv, &config);
+    parse_command_line(argc, argv, &config);    
+    
+    const rlim_t kStackSize = 1024L * 1024L;   // min stack size = 1 Mb
+    struct rlimit rl;
+    int result;
+
+    result = getrlimit(RLIMIT_STACK, &rl);
+    if (result == 0)
+    {
+        if (rl.rlim_cur < kStackSize)
+        {
+            rl.rlim_cur = kStackSize;
+            result = setrlimit(RLIMIT_STACK, &rl);
+            if (result != 0)
+            {
+                fprintf(stderr, "setrlimit returned result = %d\n", result);
+            }
+        }
+    }
 
     config.handle_bt4 = 0; // The Extended Advertising set number used for BT4
     config.handle_bt5 = 1; // The Extended Advertising set number used for BT5

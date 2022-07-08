@@ -2,6 +2,8 @@
 #ifndef _GPSMOD_H_
 #define _GPSMOD_H_
 
+#include <stdlib.h>
+
 #include "gpsd/gpsd-dev/include/libgps.h"
 #include "bluetooth.h"
 
@@ -9,10 +11,7 @@
 #define MAX_GPS_READ_RETRIES 5
 #define GPS_WAIT_TIME_MICROSECS 500000 // 1/2 second
 
-static struct gps_data_t gpsdata;
-static struct fixsource_t source;
-
-int init_gps();
-void process_gps_data(struct ODID_UAS_Data *uasData);
+int init_gps(struct fixsource_t* source, struct gps_data_t* gpsdata);
+void process_gps_data(struct gps_data_t* gpsdata, struct ODID_UAS_Data *uasData);
 
 #endif
