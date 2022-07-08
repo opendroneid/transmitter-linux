@@ -23,7 +23,7 @@
 #include "gpsmod.h"
 
 sem_t semaphore;
-pthread_t id;
+pthread_t id, gps_thread;
 
 #define MINIMUM(a,b) (((a)<(b))?(a):(b))
 
@@ -35,6 +35,12 @@ static bool kill_program = false;
 
 static struct fixsource_t source;
 static struct gps_data_t gpsdata;
+
+struct gps_loop_args {
+    struct gps_data_t *gpsdata;
+    struct ODID_UAS_Data *uasData;
+    int exit_status;
+};
 
 static void fill_example_data(struct ODID_UAS_Data *uasData) {
     uasData->BasicID[BASIC_ID_POS_ZERO].UAType = ODID_UATYPE_HELICOPTER_OR_MULTIROTOR;
@@ -127,8 +133,13 @@ static void cleanup(int exit_code) {
         sem_destroy(&semaphore);
     }
 
-    if(config.use_gps)
+    if(config.use_gps) {
+        int *ptr;
+        pthread_join(gps_thread, (void **) &ptr);
+        printf("Return value from gps_loop: %d\n", *ptr);
+
         gps_close(&gpsdata);
+    }
 
     exit(exit_code);
 }
@@ -320,19 +331,9 @@ static void parse_command_line(int argc, char *argv[], struct config_data *confi
         printf("\nWarning: Fetching GPS data requires a configured GPS sensor.\n\n");
 }
 
-void gps_loop(struct ODID_UAS_Data *uasData) {
-    signal(SIGINT,  sig_handler);
-    signal(SIGKILL, sig_handler);
-    signal(SIGSTOP, sig_handler);
-    signal(SIGTERM, sig_handler);
-
-    if(init_gps(&source, &gpsdata) != 0) {
-        fprintf(stderr,
-                "No gpsd running or network error: %d, %s\n",
-                errno, gps_errstr(errno));
-        cleanup(EXIT_FAILURE);
-    }
-
+void gps_loop(struct gps_loop_args *args) {
+    struct gps_data_t *gpsdata = args->gpsdata;
+    struct ODID_UAS_Data *uasData = args->uasData;
 
     char gpsd_message[GPS_JSON_RESPONSE_MAX];
     int retries = 0;      // cycles to wait before gpsd timeout
@@ -342,61 +343,43 @@ void gps_loop(struct ODID_UAS_Data *uasData) {
             break;
 
         int ret;
-        ret = gps_waiting(&gpsdata, GPS_WAIT_TIME_MICROSECS);
+        ret = gps_waiting(gpsdata, GPS_WAIT_TIME_MICROSECS);
         if (!ret) {
             printf("Socket not ready, retrying...\n");
             if (retries++ > MAX_GPS_WAIT_RETRIES) {
                     fprintf(stderr, "Max socket wait retries reached, exiting...");
-                cleanup(EXIT_FAILURE);
+                kill_program = true;
+                args->exit_status = 1;
+                pthread_exit((void*) &args->exit_status);
             }
             continue;
         } else {
             retries = 0;
             gpsd_message[0] = '\0';
 
-            if (gps_read(&gpsdata, gpsd_message, sizeof(gpsd_message)) == -1) {
+            if (gps_read(gpsdata, gpsd_message, sizeof(gpsd_message)) == -1) {
                 printf("Failed to read from socket, retrying...\n");
                 if(read_retries++ > MAX_GPS_READ_RETRIES) {
                     fprintf(stderr, "Max socket read retries reached, exiting...");
-                    cleanup(EXIT_FAILURE);
+                    kill_program = true;
+                    args->exit_status = 1;
+                    pthread_exit((void*) &args->exit_status);
                 }
                 continue;
             }
             read_retries = 0;
 
-            printf("gpsd: %s\n", gpsd_message);
-
-            process_gps_data(&gpsdata, uasData);
-
-            if (config.use_packs)
-                send_packs(uasData, &config);
-            else
-                send_single_messages(uasData, &config);
+            process_gps_data(gpsdata, uasData);
         }
     }
+
+    args->exit_status = 0;
+    pthread_exit(&args->exit_status);
 }
 
 int main(int argc, char *argv[])
 {
-    parse_command_line(argc, argv, &config);    
-    
-    const rlim_t kStackSize = 1024L * 1024L;   // min stack size = 1 Mb
-    struct rlimit rl;
-    int result;
-
-    result = getrlimit(RLIMIT_STACK, &rl);
-    if (result == 0)
-    {
-        if (rl.rlim_cur < kStackSize)
-        {
-            rl.rlim_cur = kStackSize;
-            result = setrlimit(RLIMIT_STACK, &rl);
-            if (result != 0)
-            {
-                fprintf(stderr, "setrlimit returned result = %d\n", result);
-            }
-        }
-    }
+    parse_command_line(argc, argv, &config);
 
     config.handle_bt4 = 0; // The Extended Advertising set number used for BT4
     config.handle_bt5 = 1; // The Extended Advertising set number used for BT5
@@ -417,7 +400,34 @@ int main(int argc, char *argv[])
         init_bluetooth(&config);
 
     if(config.use_gps) {
-        gps_loop(&uasData);
+        signal(SIGINT,  sig_handler);
+        signal(SIGKILL, sig_handler);
+        signal(SIGSTOP, sig_handler);
+        signal(SIGTERM, sig_handler);
+
+        if(init_gps(&source, &gpsdata) != 0) {
+            fprintf(stderr,
+                    "No gpsd running or network error: %d, %s\n",
+                    errno, gps_errstr(errno));
+            cleanup(EXIT_FAILURE);
+        }
+
+        struct gps_loop_args args;
+        args.gpsdata = &gpsdata;
+        args.uasData = &uasData;
+        pthread_create(&gps_thread, NULL, (void*) &gps_loop, &args);
+
+        while (true)
+        {
+            if(kill_program)
+                break;
+
+            printf("Transmitting...\n");
+            if (config.use_packs)
+                send_packs(&uasData, &config);
+            else
+                send_single_messages(&uasData, &config);
+        }
     } else {
         if (config.use_packs)
             send_packs(&uasData, &config);

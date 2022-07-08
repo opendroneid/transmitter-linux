@@ -11,8 +11,6 @@ int init_gps(struct fixsource_t* source, struct gps_data_t* gpsdata) {
         return 1;
     }
 
-    printf("gps server: %s\n", gpsdata->source.server);
-
     if (NULL != source->device) {
         flags |= WATCH_DEVICE;
     }
