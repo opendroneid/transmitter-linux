@@ -1,13 +1,12 @@
 
 # Open Drone ID transmitter example for Linux
 
-This program supports transmitting static drone ID data via Wi-Fi Beacon or Bluetooth on a desktop Linux PC.
+This program supports transmitting static drone ID data via Wi-Fi Beacon or Bluetooth on a desktop Linux PC or Raspberry Pi HW.
 
 For further information about Open Drone ID and the related specifications, please see the documentation in [opendroneid-core-c](https://github.com/opendroneid/opendroneid-core-c).
 
 The drone ID data is just static data, since the main purpose is to demonstrate how to setup the Bluetooth and Wi-Fi Beacon HW + SW to transmit valid drone ID data.
 This could easily be extended to simulate a bit more dynamic flight example.
-
 
 ## How to compile
 
@@ -46,7 +45,6 @@ make -j4
 * `4` Enable Bluetooth 4 Legacy Advertising transmission using Extended Advertising API
 * `5` Enable Bluetooth 5 Long Range + Extended Advertising transmission
 * `p` Use message packs instead of single messages
-
 
 ## Starting Wi-Fi Beacon transmission
 
@@ -119,8 +117,6 @@ There must be some size limitation in the Wi-Fi driver for vendor specific eleme
 Tested on Raspberry Pi 3B with Raspbian 11 Bullseye.
 Please note that the drone ID standards mandate message packs to be used for Wi-Fi Beacon transmissions.
 
-
-
 ## Starting Bluetooth transmission
 
 The program must be run with `sudo` rights:
@@ -136,13 +132,15 @@ On this HW, BT4 Legacy Advertisements using the Extended Advertising API (`optio
 However, when configuring both simultaneously, for some reason the HW/driver SW would only broadcast the BT4 signals.
 
 Please note that when using Bluetooth transmission for drone ID in the USA, it will be mandatory to transmit both BT4 and BT5 [simultaneously](https://github.com/opendroneid/opendroneid-core-c#relevant-specifications).
-And although it is not mandated for Europe, it would be a good idea to do the same there, in order to maximize the compatibility with receivers and the range of the signals.
+And although it is not mandated for Europe or Japan, it would be a good idea to do the same there, in order to maximize the compatibility with receivers and the range of the signals.
 
 Using the BT4 Legacy Advertising non-Extended Advertising HCI commands (`option l`) for some reason didn't work.
 
 When tested on a Raspberry Pi 3B and 4B, the Extended Advertising HCI interface commands are not supported (`option 4` and `option 5 p`).
 Probably due to the HW/driver only supporting BT4 Legacy Advertising.
 The older BT4 Legacy non-Extended Advertising HCI commands (`option l`) worked okay.
+
+A BT5 USB adapter/dongle of the brand ONVIAN and with the chipset RTL8761B has been tested on a PC with Ubuntu 20.04 and proven to be able to successfully transmit in Long Range mode.
 
 ## How to clean up
 
