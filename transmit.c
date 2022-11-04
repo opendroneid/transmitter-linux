@@ -14,16 +14,33 @@
 #include <unistd.h>
 #include <pthread.h>
 #include <semaphore.h>
+#include <signal.h>
+#include <errno.h>
+#include <sys/resource.h>
 #include "ap_interface.h"
 #include "bluetooth.h"
 #include "wifi_beacon.h"
+#include "gpsmod.h"
 
 sem_t semaphore;
+pthread_t id, gps_thread;
 
 #define MINIMUM(a,b) (((a)<(b))?(a):(b))
 
 #define BASIC_ID_POS_ZERO 0
 #define BASIC_ID_POS_ONE 1
+
+static struct config_data config = { 0 };
+static bool kill_program = false;
+
+static struct fixsource_t source;
+static struct gps_data_t gpsdata;
+
+struct gps_loop_args {
+    struct gps_data_t *gpsdata;
+    struct ODID_UAS_Data *uasData;
+    int exit_status;
+};
 
 static void fill_example_data(struct ODID_UAS_Data *uasData) {
     uasData->BasicID[BASIC_ID_POS_ZERO].UAType = ODID_UATYPE_HELICOPTER_OR_MULTIROTOR;
@@ -37,23 +54,6 @@ static void fill_example_data(struct ODID_UAS_Data *uasData) {
     char uas_caa_id[] = "FD3454B778E565C24B70";
     strncpy(uasData->BasicID[BASIC_ID_POS_ONE].UASID, uas_caa_id,
             MINIMUM(sizeof(uas_caa_id), sizeof(uasData->BasicID[BASIC_ID_POS_ONE].UASID)));
-
-    uasData->Location.Status = ODID_STATUS_AIRBORNE;
-    uasData->Location.Direction = 361.f;
-    uasData->Location.SpeedHorizontal = 0.0f;
-    uasData->Location.SpeedVertical = 0.35f;
-    uasData->Location.Latitude = 51.4791;
-    uasData->Location.Longitude = -0.0013;
-    uasData->Location.AltitudeBaro = 100;
-    uasData->Location.AltitudeGeo = 110;
-    uasData->Location.HeightType = ODID_HEIGHT_REF_OVER_GROUND;
-    uasData->Location.Height = 80;
-    uasData->Location.HorizAccuracy = createEnumHorizontalAccuracy(5.5f);
-    uasData->Location.VertAccuracy = createEnumVerticalAccuracy(9.5f);
-    uasData->Location.BaroAccuracy = createEnumVerticalAccuracy(0.5f);
-    uasData->Location.SpeedAccuracy = createEnumSpeedAccuracy(0.5f);
-    uasData->Location.TSAccuracy = createEnumTimestampAccuracy(0.1f);
-    uasData->Location.TimeStamp = 360.52f;
 
     uasData->Auth[0].AuthType = ODID_AUTH_UAS_ID_SIGNATURE;
     uasData->Auth[0].DataPage = 0;
@@ -100,6 +100,56 @@ static void fill_example_data(struct ODID_UAS_Data *uasData) {
             MINIMUM(sizeof(operatorId), sizeof(uasData->OperatorID.OperatorId)));
 }
 
+static void fill_example_gps_data(struct ODID_UAS_Data *uasData) {
+    uasData->Location.Status = ODID_STATUS_AIRBORNE;
+    uasData->Location.Direction = 361.f;
+    uasData->Location.SpeedHorizontal = 0.0f;
+    uasData->Location.SpeedVertical = 0.35f;
+    uasData->Location.Latitude = 51.4791;
+    uasData->Location.Longitude = -0.0013;
+    uasData->Location.AltitudeBaro = 100;
+    uasData->Location.AltitudeGeo = 110;
+    uasData->Location.HeightType = ODID_HEIGHT_REF_OVER_GROUND;
+    uasData->Location.Height = 80;
+    uasData->Location.HorizAccuracy = createEnumHorizontalAccuracy(5.5f);
+    uasData->Location.VertAccuracy = createEnumVerticalAccuracy(9.5f);
+    uasData->Location.BaroAccuracy = createEnumVerticalAccuracy(0.5f);
+    uasData->Location.SpeedAccuracy = createEnumSpeedAccuracy(0.5f);
+    uasData->Location.TSAccuracy = createEnumTimestampAccuracy(0.1f);
+    uasData->Location.TimeStamp = 360.52f;
+}
+
+static void cleanup(int exit_code) {
+    if (config.use_btl || config.use_bt4 || config.use_bt5)
+        close_bluetooth(&config);
+
+    if (config.use_beacon) {
+        send_quit();
+
+        int *ptr;
+        pthread_join(id, (void **) &ptr);
+        printf("Return value from ap_interface_init: %i\n", *ptr);
+
+        sem_destroy(&semaphore);
+    }
+
+    if(config.use_gps) {
+        int *ptr;
+        pthread_join(gps_thread, (void **) &ptr);
+        printf("Return value from gps_loop: %d\n", *ptr);
+
+        gps_close(&gpsdata);
+    }
+
+    exit(exit_code);
+}
+
+static void sig_handler(int signo) {
+    if (signo == SIGINT || signo == SIGSTOP || signo == SIGKILL || signo == SIGTERM) {
+        kill_program = true;
+    }
+}
+
 static void send_message(union ODID_Message_encoded *encoded, struct config_data *config, uint8_t msg_counter) {
     if (config->use_btl)
         send_bluetooth_message(encoded, msg_counter, config);
@@ -107,7 +157,7 @@ static void send_message(union ODID_Message_encoded *encoded, struct config_data
         send_bluetooth_message_extended_api(encoded, msg_counter, config);
     if (config->use_beacon)
         send_beacon_message(encoded, msg_counter);
-    sleep(4);
+    usleep(100000);
 }
 
 // When using the WiFi Beacon transport method, the standards require that all messages are wrapped
@@ -116,7 +166,7 @@ static void send_single_messages(struct ODID_UAS_Data *uasData, struct config_da
     union ODID_Message_encoded encoded;
     memset(&encoded, 0, sizeof(union ODID_Message_encoded));
 
-    for (int i = 0; i < 10; i++) {
+    for (int i = 0; i < 1; i++) {
         if (encodeBasicIDMessage((ODID_BasicID_encoded *) &encoded, &uasData->BasicID[BASIC_ID_POS_ZERO]) != ODID_SUCCESS)
             printf("Error: Failed to encode Basic ID\n");
         send_message(&encoded, config, config->msg_counters[ODID_MSG_COUNTER_BASIC_ID]++);
@@ -211,6 +261,7 @@ void print_help() {
     printf("           using the Extended Advertising HCI API commands\n");
     printf("         5 Enable Bluetooth 5 Long Range + Extended Advertising transmission\n");
     printf("         p Use message packs instead of single messages\n");
+    printf("         g Use gpsd to dynamically update location messages after each loop of messages\n");
     printf("E.g. sudo ./transmit b p\n\n");
     printf("Wi-Fi Beacon transmit only works when running\n");
     printf("\"sudo hostapd/hostapd/hostapd beacon.conf\" in a separate shell.\n");
@@ -246,6 +297,9 @@ static void parse_command_line(int argc, char *argv[], struct config_data *confi
             case 'p':
                 config->use_packs = true;
                 break;
+            case 'g':
+                config->use_gps = true;
+                break;
             default:
                 break;
         }
@@ -272,12 +326,59 @@ static void parse_command_line(int argc, char *argv[], struct config_data *confi
         print_help();
         exit(EXIT_SUCCESS);
     }
+
+    if (config->use_gps)
+        printf("\nWarning: Fetching GPS data requires a configured GPS sensor.\n\n");
+}
+
+void gps_loop(struct gps_loop_args *args) {
+    struct gps_data_t *gpsdata = args->gpsdata;
+    struct ODID_UAS_Data *uasData = args->uasData;
+
+    char gpsd_message[GPS_JSON_RESPONSE_MAX];
+    int retries = 0;      // cycles to wait before gpsd timeout
+    int read_retries = 0;
+    while(true) {
+        if(kill_program)
+            break;
+
+        int ret;
+        ret = gps_waiting(gpsdata, GPS_WAIT_TIME_MICROSECS);
+        if (!ret) {
+            printf("Socket not ready, retrying...\n");
+            if (retries++ > MAX_GPS_WAIT_RETRIES) {
+                    fprintf(stderr, "Max socket wait retries reached, exiting...");
+                kill_program = true;
+                args->exit_status = 1;
+                pthread_exit((void*) &args->exit_status);
+            }
+            continue;
+        } else {
+            retries = 0;
+            gpsd_message[0] = '\0';
+
+            if (gps_read(gpsdata, gpsd_message, sizeof(gpsd_message)) == -1) {
+                printf("Failed to read from socket, retrying...\n");
+                if(read_retries++ > MAX_GPS_READ_RETRIES) {
+                    fprintf(stderr, "Max socket read retries reached, exiting...");
+                    kill_program = true;
+                    args->exit_status = 1;
+                    pthread_exit((void*) &args->exit_status);
+                }
+                continue;
+            }
+            read_retries = 0;
+
+            process_gps_data(gpsdata, uasData);
+        }
+    }
+
+    args->exit_status = 0;
+    pthread_exit(&args->exit_status);
 }
 
 int main(int argc, char *argv[])
 {
-    pthread_t id;
-    struct config_data config = { 0 };
     parse_command_line(argc, argv, &config);
 
     config.handle_bt4 = 0; // The Extended Advertising set number used for BT4
@@ -292,25 +393,47 @@ int main(int argc, char *argv[])
     struct ODID_UAS_Data uasData;
     odid_initUasData(&uasData);
     fill_example_data(&uasData);
+    if(!config.use_gps)
+        fill_example_gps_data(&uasData);
 
     if (config.use_btl || config.use_bt4 || config.use_bt5)
         init_bluetooth(&config);
 
-    if (config.use_packs)
-        send_packs(&uasData, &config);
-    else
-        send_single_messages(&uasData, &config);
+    if(config.use_gps) {
+        signal(SIGINT,  sig_handler);
+        signal(SIGKILL, sig_handler);
+        signal(SIGSTOP, sig_handler);
+        signal(SIGTERM, sig_handler);
 
-    if (config.use_btl || config.use_bt4 || config.use_bt5)
-        close_bluetooth(&config);
+        if(init_gps(&source, &gpsdata) != 0) {
+            fprintf(stderr,
+                    "No gpsd running or network error: %d, %s\n",
+                    errno, gps_errstr(errno));
+            cleanup(EXIT_FAILURE);
+        }
 
-    if (config.use_beacon) {
-        send_quit();
+        struct gps_loop_args args;
+        args.gpsdata = &gpsdata;
+        args.uasData = &uasData;
+        pthread_create(&gps_thread, NULL, (void*) &gps_loop, &args);
 
-        int *ptr;
-        pthread_join(id, (void **) &ptr);
-        printf("Return value from ap_interface_init: %i\n", *ptr);
+        while (true)
+        {
+            if(kill_program)
+                break;
 
-        sem_destroy(&semaphore);
+            printf("Transmitting...\n");
+            if (config.use_packs)
+                send_packs(&uasData, &config);
+            else
+                send_single_messages(&uasData, &config);
+        }
+    } else {
+        if (config.use_packs)
+            send_packs(&uasData, &config);
+        else
+            send_single_messages(&uasData, &config);
     }
+
+    cleanup(EXIT_SUCCESS);
 }

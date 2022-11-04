@@ -27,6 +27,7 @@ include_directories(
         hostapd/src
         hostapd/src/utils
         core-c/libopendroneid
+        gpsd/gpsd-dev
         bluez
 )
 
@@ -45,6 +46,7 @@ add_executable(transmit
         utils.c
         bluetooth.c
         wifi_beacon.c
+        gpsmod.c
         transmit.c
         print_bt_features.c
 )
@@ -52,4 +54,5 @@ add_executable(transmit
 target_link_libraries(transmit
         pthread
         m
+        "${PROJECT_SOURCE_DIR}/gpsd/gpsd-dev/libgps.so"
 )

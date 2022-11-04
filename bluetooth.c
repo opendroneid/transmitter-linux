@@ -351,7 +351,7 @@ void init_bluetooth(struct config_data *config) {
     hci_le_read_local_supported_features(device_descriptor);
 
     if (config->use_btl) {
-        hci_le_set_advertising_parameters(device_descriptor, 300);
+        hci_le_set_advertising_parameters(device_descriptor, 100);
         hci_le_set_random_address(device_descriptor, mac);
     }
 

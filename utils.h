@@ -21,6 +21,9 @@ struct config_data {
     bool use_btl; // Bluetooth Legacy Advertising
     bool use_bt4; // Bluetooth Legacy Advertising using Extended Advertising APIs
     bool use_bt5; // Bluetooth Long Range with Extended Advertising
+
+    bool use_gps;
+    
     uint8_t handle_bt4;
     uint8_t handle_bt5;
 
