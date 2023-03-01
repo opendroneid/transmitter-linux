@@ -114,6 +114,12 @@ static void generate_random_mac_address(uint8_t *mac) {
  * (In version 5.2, they appear to have been moved to Vol 4, Part E, Chapter 7.8).
  */
 
+static void hci_reset(int dd) {
+    uint8_t ogf = OGF_HOST_CTL; // Opcode Group Field. LE Controller Commands
+    uint16_t ocf = OCF_RESET;
+    send_cmd(dd, ogf, ocf, NULL, 0);
+}
+
 static void hci_le_read_local_supported_features(int dd) {
     uint8_t ogf = OGF_LE_CTL; // Opcode Group Field. LE Controller Commands
     uint16_t ocf = OCF_LE_READ_LOCAL_SUPPORTED_FEATURES;
@@ -346,21 +352,25 @@ void init_bluetooth(struct config_data *config) {
     generate_random_mac_address(mac);
 
     device_descriptor = open_hci_device();
+    hci_reset(device_descriptor);
     stop_transmit(config);
 
     hci_le_read_local_supported_features(device_descriptor);
 
     if (config->use_btl) {
+        hci_reset(device_descriptor);
         hci_le_set_advertising_parameters(device_descriptor, 100);
         hci_le_set_random_address(device_descriptor, mac);
     }
 
     if (config->use_bt4) {
+        hci_reset(device_descriptor);
         hci_le_set_extended_advertising_parameters(device_descriptor, config->handle_bt4, 300, false);
         hci_le_set_advertising_set_random_address(device_descriptor, config->handle_bt4, mac);
     }
 
     if (config->use_bt5) {
+        hci_reset(device_descriptor);
         hci_le_set_extended_advertising_parameters(device_descriptor, config->handle_bt5, 950, true);
         hci_le_set_advertising_set_random_address(device_descriptor, config->handle_bt5, mac);
     }
