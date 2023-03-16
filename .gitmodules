@@ -1,12 +1,12 @@
 [submodule "hostapd"]
 	path = hostapd
-	url = git://w1.fi/hostap.git
+	url = https://w1.fi/hostap.git
 [submodule "bluez"]
 	path = bluez
-	url = git://git.kernel.org/pub/scm/bluetooth/bluez.git
+	url = https://git.kernel.org/pub/scm/bluetooth/bluez.git
 [submodule "core-c"]
 	path = core-c
-	url = git@github.com:opendroneid/opendroneid-core-c.git
+	url = ../opendroneid-core-c.git
 [submodule "gpsd"]
 	path = gpsd
 	url = https://gitlab.com/gpsd/gpsd.git
