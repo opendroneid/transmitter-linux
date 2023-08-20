@@ -61,7 +61,7 @@ void send_beacon_message_pack(struct ODID_MessagePack_encoded *pack_enc, uint8_t
     char *cmd[] = { "set", "vendor_elements", "dd1EFA0BBC0D00" };
 
     // The buffers cmd points to are in read-only memory. Create a writable buffer
-    char data[2*(WIFI_BEACON_HEADER_SIZE + 3 + ODID_PACK_MAX_MESSAGES*ODID_MESSAGE_SIZE)] = { 0 };
+    char data[2*(WIFI_BEACON_HEADER_SIZE + 3 + ODID_PACK_MAX_MESSAGES*ODID_MESSAGE_SIZE) + 1] = { 0 };
     memcpy(data, cmd[2], 2*WIFI_BEACON_HEADER_SIZE);
     cmd[2] = data;
 
